@@ -73,6 +73,7 @@
       border: 1.5px solid var(--border);
       padding: 14px;
       transition: box-shadow 0.3s, border-color 0.2s;
+      min-width: 0;
     }
     .deck.deck-a { border-color: rgba(67,97,238,0.25); }
     .deck.deck-b { border-color: rgba(233,30,140,0.25); }
@@ -209,7 +210,7 @@
     .fp-new { color: var(--accent); font-weight: 600; }
 
     /* ── Drag ghost / reorder placeholder ────────────────────────── */
-    .drag-ghost { position: fixed; background: var(--card); border: 1.5px solid var(--accent); border-radius: var(--r-sm); padding: 8px 14px; font-size: 13px; pointer-events: none; z-index: 9999; box-shadow: 0 8px 28px rgba(0,0,0,0.5); white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+    .drag-ghost { position: fixed; background: var(--card); border: 1.5px solid var(--accent); border-radius: var(--r-sm); padding: 8px 14px; font-size: 13px; pointer-events: none; z-index: 9999; box-shadow: 0 8px 28px rgba(0,0,0,0.5); width: 200px; max-width: calc(100vw - 20px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .reorder-ph { border: 1.5px dashed var(--accent); border-radius: var(--r-sm); background: rgba(124,108,255,0.08); pointer-events: none; }
 
     /* ── Empty / toast ───────────────────────────────────────────── */
@@ -466,7 +467,6 @@ function deckLoad(id, song) {
   t.textContent = song.name; t.classList.remove('empty');
   document.getElementById('hint-' + id).style.display = 'none';
   document.getElementById('cur-' + id).textContent = '0:00';
-  toast('Geladen in Deck ' + id.toUpperCase() + ': ' + song.name);
   renderAll();
 }
 
@@ -820,7 +820,7 @@ function setupReorder(handle, item, song) {
       if (Math.abs(t.clientY - ro.startY) < 8) return;
       ro.active = true;
       const g = ro.item.cloneNode(true);
-      g.style.cssText = 'position:fixed;left:10px;right:10px;opacity:0.85;z-index:9999;pointer-events:none;background:var(--card-hi);border-radius:var(--r-sm);border:1px solid var(--accent);padding:9px 12px;display:flex;align-items:center;gap:8px;';
+      g.style.cssText = 'position:fixed;left:10px;right:10px;opacity:0.85;z-index:9999;pointer-events:none;background:var(--card-hi);border-radius:var(--r-sm);border:1px solid var(--accent);padding:9px 12px;display:flex;align-items:center;gap:8px;overflow:hidden;min-width:0;';
       document.body.appendChild(g); ro.ghost = g;
       const ph = document.createElement('div');
       ph.className = 'reorder-ph'; ph.style.height = ro.item.offsetHeight + 'px';
