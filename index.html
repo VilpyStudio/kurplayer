@@ -293,7 +293,7 @@
 
 <div class="install-banner" id="install-banner">
   <div class="install-banner-top">
-    <span class="install-banner-title">📲 Installeer KürPlayer</span>
+    <span class="install-banner-title">Installeer KürPlayer</span>
     <button class="install-banner-close" onclick="dismissInstallBanner()">✕</button>
   </div>
   <div class="install-banner-body" id="install-banner-body"></div>
@@ -328,7 +328,7 @@ if (navigator.storage && navigator.storage.persist) {
   let deferredPrompt = null;
 
   if (isIOS) {
-    body.innerHTML = 'Tik op het deel-icoon <strong>&#9650; Deel</strong> onderaan Safari en kies <strong>"Zet op beginscherm"</strong> om KürPlayer als app te installeren.';
+    body.innerHTML = 'Tik op het deel-icoon <strong><svg width="13" height="16" viewBox="0 0 13 16" fill="currentColor" style="vertical-align:-3px;display:inline-block"><path d="M6.5 0L3 3.5h2.2V10h2.6V3.5H10L6.5 0z"/><path d="M1 6v9h11V6H9.5v1.5h1V13.5h-8V7.5h1V6H1z"/></svg></strong> onderaan Safari en kies <strong>"Zet op beginscherm"</strong>.';
     btn.textContent = 'Begrepen';
     btn.onclick = dismissInstallBanner;
     setTimeout(() => banner.classList.add('show'), 1200);
