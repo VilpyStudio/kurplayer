@@ -285,10 +285,15 @@
 // ── Service worker ─────────────────────────────────────────────────────────────
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js')
+  navigator.serviceWorker.register('sw.js')
     .then(() => navigator.serviceWorker.ready)
     .then(() => toast('✅ App klaar voor offline gebruik'))
     .catch(() => {});
+}
+
+// Vraag persistente opslag aan zodat iOS de data niet wist
+if (navigator.storage && navigator.storage.persist) {
+  navigator.storage.persist();
 }
 
 // ── IndexedDB (audio bestanden bewaren) ────────────────────────────────────────
@@ -340,13 +345,24 @@ async function loadSaved() {
     folders.push(...(meta.folders || []));
     (meta.played || []).forEach(id => played.add(id));
     const blobs = new Map((await DB.all()).map(e => [e.id, e.blob]));
+    const expected = (meta.songs || []).length;
     for (const s of (meta.songs || [])) {
       const blob = blobs.get(s.id);
       if (!blob) continue;
       library.push({ ...s, url: URL.createObjectURL(blob) });
     }
-    if (library.length) { renderAll(); toast(library.length + ' nummers geladen'); }
-  } catch(e) { console.warn('loadSaved:', e); }
+    if (library.length) {
+      renderAll();
+      if (library.length < expected) {
+        toast('⚠️ ' + library.length + '/' + expected + ' nummers geladen — hervoeg ontbrekende nummers');
+      } else {
+        toast('✅ ' + library.length + ' nummers geladen');
+      }
+    }
+  } catch(e) {
+    console.warn('loadSaved:', e);
+    toast('⚠️ Kon nummers niet laden: ' + e.message);
+  }
 }
 
 // ── State ──────────────────────────────────────────────────────────────────────
