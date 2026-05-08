@@ -1,9 +1,12 @@
-const CACHE = 'kurplayer-v1';
-const FILES = ['./', './index.html', './manifest.json', './sw.js', './icon-192.png', './icon-512.png', './icon-180.png'];
+const CACHE = 'kurplayer-v3';
+const FILES = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './icon-180.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(FILES))
+    // cache: 'reload' forceert verse bestanden van de server, nooit uit de HTTP-cache
+    caches.open(CACHE).then(c =>
+      c.addAll(FILES.map(url => new Request(url, { cache: 'reload' })))
+    )
   );
   self.skipWaiting();
 });
@@ -20,9 +23,15 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   if (e.request.url.startsWith('blob:')) return;
 
+  // Navigatie: altijd eerst netwerk proberen, cache als fallback (offline)
   if (e.request.mode === 'navigate') {
     e.respondWith(
-      caches.match('./index.html').then(r => r || fetch(e.request))
+      fetch(e.request, { cache: 'no-cache' })
+        .then(res => {
+          const clone = res.clone();
+          caches.open(CACHE).then(c => c.put(e.request, clone));
+          return res;
+        })
         .catch(() => caches.match('./index.html'))
     );
     return;
