@@ -296,31 +296,30 @@ if (navigator.storage && navigator.storage.persist) {
   navigator.storage.persist();
 }
 
-// ── IndexedDB (audio bestanden bewaren) ────────────────────────────────────────
+// ── Audio opslag via Cache API (betrouwbaarder dan IndexedDB op iOS) ───────────
 
-const DB = (() => {
-  const ready = new Promise((res, rej) => {
-    const r = indexedDB.open('musicplayer', 1);
-    r.onupgradeneeded = e => e.target.result.createObjectStore('songs', { keyPath: 'id' });
-    r.onsuccess = e => res(e.target.result);
-    r.onerror   = () => rej(r.error);
-  });
-  const tx = (mode, fn) => ready.then(db => new Promise((res, rej) => {
-    const t = db.transaction('songs', mode);
-    t.oncomplete = () => res();
-    t.onerror    = () => rej(t.error);
-    fn(t.objectStore('songs'), res, rej);
-  }));
-  return {
-    save:   (id, blob)  => tx('readwrite', s => s.put({ id, blob })),
-    remove: id          => tx('readwrite', s => s.delete(id)),
-    all:    ()          => ready.then(db => new Promise((res, rej) => {
-      const r = db.transaction('songs','readonly').objectStore('songs').getAll();
-      r.onsuccess = () => res(r.result);
-      r.onerror   = () => rej(r.error);
-    })),
-  };
-})();
+const AudioStore = {
+  save: async (id, buf, type) => {
+    const cache = await caches.open('kurplayer-audio');
+    await cache.put('song-' + id, new Response(buf, { headers: { 'Content-Type': type } }));
+  },
+  remove: async id => {
+    const cache = await caches.open('kurplayer-audio');
+    await cache.delete('song-' + id);
+  },
+  all: async () => {
+    const cache = await caches.open('kurplayer-audio');
+    const keys  = await cache.keys();
+    const out   = [];
+    for (const req of keys) {
+      const id = parseInt(req.url.split('song-').pop());
+      if (isNaN(id)) continue;
+      const res = await cache.match(req);
+      if (res) out.push({ id, buf: await res.arrayBuffer() });
+    }
+    return out;
+  }
+};
 
 // ── Metadata opslaan/laden (localStorage) ──────────────────────────────────────
 
@@ -353,9 +352,9 @@ async function loadSaved() {
     fuid = meta.fuid || 0;
     folders.push(...(meta.folders || []));
     (meta.played || []).forEach(id => played.add(id));
-    const dbEntries = await DB.all();
+    const dbEntries = await AudioStore.all();
     toast('ℹ️ Stap 3: ' + dbEntries.length + ' bestanden in IndexedDB');
-    const buffers = new Map(dbEntries.map(e => [e.id, e.blob]));
+    const buffers = new Map(dbEntries.map(e => [e.id, e.buf]));
     for (const s of (meta.songs || [])) {
       const buf = buffers.get(s.id);
       if (!buf) continue;
@@ -533,7 +532,7 @@ async function addFile(file) {
   library.push(song);
   try {
     const buf = await file.arrayBuffer();
-    await DB.save(song.id, buf);
+    await AudioStore.save(song.id, buf, song.type);
   } catch(e) {
     console.warn('DB opslaan mislukt:', e);
     toast('⚠️ Kon "' + name + '" niet opslaan: ' + (e.message || e.name || 'onbekende fout'));
@@ -549,7 +548,7 @@ function removeSong(id) {
   URL.revokeObjectURL(song.url);
   library.splice(idx, 1);
   played.delete(id);
-  DB.remove(id).catch(() => {});
+  AudioStore.remove(id).catch(() => {});
   renderAll();
   saveMeta();
 }
