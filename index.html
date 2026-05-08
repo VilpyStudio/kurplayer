@@ -521,21 +521,33 @@ document.getElementById('file-input').addEventListener('change', async e => {
 async function addFile(file) {
   const name = file.name.replace(/\.[^.]+$/, '');
   if (library.some(s => s.name === name && s.size === file.size)) { toast('"' + name + '" staat al in de bibliotheek'); return false; }
-  const url = URL.createObjectURL(file);
+
+  // Lees bestandsdata DIRECT — op iOS raakt de File ongeldig na een await
+  let buf;
+  try {
+    buf = await file.arrayBuffer();
+  } catch(e) {
+    toast('⚠️ Kon "' + name + '" niet lezen: ' + (e.message || 'leesfout'));
+    return false;
+  }
+
+  const type = file.type || 'audio/mpeg';
+  const url  = URL.createObjectURL(new Blob([buf], { type }));
+
   const duration = await new Promise(res => {
     const a = new Audio(url);
     a.addEventListener('loadedmetadata', () => res(a.duration));
     a.addEventListener('error', () => res(0));
     setTimeout(() => res(0), 5000);
   });
-  const song = { id: uid++, name, url, duration, size: file.size, folderId: null, type: file.type || 'audio/mpeg' };
+
+  const song = { id: uid++, name, url, duration, size: file.size, folderId: null, type };
   library.push(song);
+
   try {
-    const buf = await file.arrayBuffer();
-    await AudioStore.save(song.id, buf, song.type);
+    await AudioStore.save(song.id, buf, type);
   } catch(e) {
-    console.warn('DB opslaan mislukt:', e);
-    toast('⚠️ Kon "' + name + '" niet opslaan: ' + (e.message || e.name || 'onbekende fout'));
+    toast('⚠️ Kon "' + name + '" niet opslaan: ' + (e.message || e.name || 'cache fout'));
   }
   return true;
 }
