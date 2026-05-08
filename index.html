@@ -219,7 +219,7 @@
     .empty-lib-icon { font-size: 36px; margin-bottom: 10px; }
     .empty-lib p { font-size: 13px; line-height: 1.7; }
 
-    .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(70px); background: var(--card-hi); color: var(--t1); padding: 10px 20px; border-radius: 22px; font-size: 13px; font-weight: 500; box-shadow: 0 4px 24px rgba(0,0,0,0.4); border: 1px solid var(--border); transition: transform 0.28s cubic-bezier(.34,1.4,.64,1); z-index: 9998; pointer-events: none; }
+    .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(150%); background: var(--card-hi); color: var(--t1); padding: 10px 20px; border-radius: 22px; font-size: 13px; font-weight: 500; box-shadow: 0 4px 24px rgba(0,0,0,0.4); border: 1px solid var(--border); transition: transform 0.28s cubic-bezier(.34,1.4,.64,1); z-index: 9998; pointer-events: none; white-space: nowrap; }
     .toast.show { transform: translateX(-50%) translateY(0); }
   </style>
 </head>
@@ -286,7 +286,6 @@
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js')
     .then(() => navigator.serviceWorker.ready)
-    .then(() => toast('✅ App klaar voor offline gebruik'))
     .catch(() => {});
 }
 
@@ -332,34 +331,15 @@ function saveMeta() {
     });
     localStorage.setItem('mp-meta', data);
     if (!localStorage.getItem('mp-meta')) throw new Error('teruggelezen waarde is leeg');
-    diagMsg('💾 ' + library.length + ' nummer' + (library.length === 1 ? '' : 's') + ' opgeslagen', false);
   } catch(e) {
     toast('⚠️ Opslaan mislukt: ' + e.message);
-    diagMsg('❌ Opslaan mislukt: ' + e.message, true);
   }
-}
-
-function diagMsg(msg, err) {
-  let el = document.getElementById('diag-bar');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'diag-bar';
-    el.style.cssText = 'padding:6px 18px;font-size:11px;text-align:center;flex-shrink:0;font-family:monospace;word-break:break-all;';
-    const lib = document.querySelector('.library');
-    if (lib) lib.parentNode.insertBefore(el, lib);
-  }
-  el.style.background = err ? 'rgba(220,50,50,0.2)' : 'rgba(50,200,100,0.1)';
-  el.style.color = err ? '#ff8080' : '#80e0a0';
-  el.textContent = msg;
 }
 
 async function loadSaved() {
   try {
     const raw = localStorage.getItem('mp-meta');
-    if (!raw) {
-      diagMsg('Geen opgeslagen data (localStorage leeg)', false);
-      return;
-    }
+    if (!raw) return;
     const meta = JSON.parse(raw);
     const expected = (meta.songs || []).length;
     if (!expected) return;
@@ -368,7 +348,6 @@ async function loadSaved() {
     folders.push(...(meta.folders || []));
     (meta.played || []).forEach(id => played.add(id));
     const dbEntries = await AudioStore.all();
-    diagMsg('localStorage: ' + expected + ' nummers | Cache: ' + dbEntries.length + ' bestanden', dbEntries.length < expected);
     const buffers = new Map(dbEntries.map(e => [e.id, e.buf]));
     for (const s of (meta.songs || [])) {
       const buf = buffers.get(s.id);
@@ -376,14 +355,9 @@ async function loadSaved() {
       const blob = new Blob([buf], { type: s.type || 'audio/mpeg' });
       library.push({ ...s, url: URL.createObjectURL(blob) });
     }
-    if (library.length) {
-      renderAll();
-      diagMsg('✅ ' + library.length + '/' + expected + ' nummers hersteld uit opslag', false);
-    } else {
-      diagMsg('❌ ' + expected + ' nummers in meta maar 0 in Cache — opslag werkt niet', true);
-    }
+    if (library.length) renderAll();
   } catch(e) {
-    diagMsg('❌ Laad-fout: ' + (e.message || e.name || String(e)), true);
+    toast('⚠️ Laden mislukt: ' + (e.message || e.name));
   }
 }
 
@@ -561,12 +535,7 @@ async function addFile(file) {
 
   try {
     await AudioStore.save(song.id, buf, type);
-    // verify entry is actually in cache
-    const verify = await caches.open('kurplayer-audio').then(c => c.match('song-' + song.id));
-    if (!verify) throw new Error('entry niet teruggevonden na opslaan');
-    diagMsg('💾 ' + library.length + ' nummer' + (library.length === 1 ? '' : 's') + ' opgeslagen in cache ✓', false);
   } catch(e) {
-    diagMsg('❌ Cache opslaan mislukt: ' + (e.message || e.name), true);
     toast('⚠️ Kon "' + name + '" niet opslaan: ' + (e.message || e.name || 'cache fout'));
   }
   return true;
