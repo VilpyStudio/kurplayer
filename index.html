@@ -268,11 +268,10 @@
     <input type="file" id="file-input" accept="audio/*,video/mp4,.mp3,.mp4,.wav,.m4a,.aac,.ogg,.flac,.aiff" multiple>
   </div>
   <input class="search" type="text" placeholder="Zoeken..." id="search" oninput="renderAll()">
-  <div class="song-list" id="song-list">
-    <div class="empty-lib" id="empty-msg">
-      <div class="empty-lib-icon">🎵</div>
-      <p>Geen nummers geladen.<br>Druk op <strong>+ Nummers</strong> om bestanden toe te voegen.</p>
-    </div>
+  <div class="song-list" id="song-list"></div>
+  <div class="empty-lib" id="empty-msg">
+    <div class="empty-lib-icon">🎵</div>
+    <p>Geen nummers geladen.<br>Druk op <strong>+ Nummers</strong> om bestanden toe te voegen.</p>
   </div>
 </div>
 
@@ -333,8 +332,10 @@ function saveMeta() {
     });
     localStorage.setItem('mp-meta', data);
     if (!localStorage.getItem('mp-meta')) throw new Error('teruggelezen waarde is leeg');
+    diagMsg('💾 ' + library.length + ' nummer' + (library.length === 1 ? '' : 's') + ' opgeslagen', false);
   } catch(e) {
     toast('⚠️ Opslaan mislukt: ' + e.message);
+    diagMsg('❌ Opslaan mislukt: ' + e.message, true);
   }
 }
 
@@ -560,7 +561,12 @@ async function addFile(file) {
 
   try {
     await AudioStore.save(song.id, buf, type);
+    // verify entry is actually in cache
+    const verify = await caches.open('kurplayer-audio').then(c => c.match('song-' + song.id));
+    if (!verify) throw new Error('entry niet teruggevonden na opslaan');
+    diagMsg('💾 ' + library.length + ' nummer' + (library.length === 1 ? '' : 's') + ' opgeslagen in cache ✓', false);
   } catch(e) {
+    diagMsg('❌ Cache opslaan mislukt: ' + (e.message || e.name), true);
     toast('⚠️ Kon "' + name + '" niet opslaan: ' + (e.message || e.name || 'cache fout'));
   }
   return true;
