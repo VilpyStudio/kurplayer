@@ -338,22 +338,36 @@ function saveMeta() {
   }
 }
 
+function diagMsg(msg, err) {
+  let el = document.getElementById('diag-bar');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'diag-bar';
+    el.style.cssText = 'padding:6px 18px;font-size:11px;text-align:center;flex-shrink:0;font-family:monospace;word-break:break-all;';
+    const lib = document.querySelector('.library');
+    if (lib) lib.parentNode.insertBefore(el, lib);
+  }
+  el.style.background = err ? 'rgba(220,50,50,0.2)' : 'rgba(50,200,100,0.1)';
+  el.style.color = err ? '#ff8080' : '#80e0a0';
+  el.textContent = msg;
+}
+
 async function loadSaved() {
   try {
     const raw = localStorage.getItem('mp-meta');
     if (!raw) {
-      toast('ℹ️ Stap 1: geen localStorage data gevonden');
+      diagMsg('Geen opgeslagen data (localStorage leeg)', false);
       return;
     }
     const meta = JSON.parse(raw);
     const expected = (meta.songs || []).length;
-    toast('ℹ️ Stap 2: ' + expected + ' nummers in localStorage, ophalen uit DB...');
+    if (!expected) return;
     uid  = meta.uid  || 0;
     fuid = meta.fuid || 0;
     folders.push(...(meta.folders || []));
     (meta.played || []).forEach(id => played.add(id));
     const dbEntries = await AudioStore.all();
-    toast('ℹ️ Stap 3: ' + dbEntries.length + ' bestanden in IndexedDB');
+    diagMsg('localStorage: ' + expected + ' nummers | Cache: ' + dbEntries.length + ' bestanden', dbEntries.length < expected);
     const buffers = new Map(dbEntries.map(e => [e.id, e.buf]));
     for (const s of (meta.songs || [])) {
       const buf = buffers.get(s.id);
@@ -363,12 +377,12 @@ async function loadSaved() {
     }
     if (library.length) {
       renderAll();
-      toast('✅ ' + library.length + '/' + expected + ' nummers hersteld');
+      diagMsg('✅ ' + library.length + '/' + expected + ' nummers hersteld uit opslag', false);
     } else {
-      toast('⚠️ Stap 4: nummers in meta maar niet in DB — audio kwijt');
+      diagMsg('❌ ' + expected + ' nummers in meta maar 0 in Cache — opslag werkt niet', true);
     }
   } catch(e) {
-    toast('⚠️ Laad-fout: ' + e.message);
+    diagMsg('❌ Laad-fout: ' + (e.message || e.name || String(e)), true);
   }
 }
 
