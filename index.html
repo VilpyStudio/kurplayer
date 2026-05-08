@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Player">
+  <link rel="manifest" href="/manifest.json">
+  <title>Music Player</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    :root {
+      --bg:      #0c0c14;
+      --surface: #13131f;
+      --card:    #1b1b2a;
+      --card-hi: #222233;
+      --border:  rgba(255,255,255,0.07);
+      --a:       #4361ee;
+      --a-glow:  rgba(67,97,238,0.25);
+      --b:       #e91e8c;
+      --b-glow:  rgba(233,30,140,0.25);
+      --accent:  #7c6cff;
+      --t1:      #f0f0f8;
+      --t2:      #7878a0;
+      --r:       14px;
+      --r-sm:    8px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--t1);
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* ── Header ─────────────────────────────────────────────────── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px 12px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    header h1 {
+      font-size: 18px;
+      font-weight: 700;
+      background: linear-gradient(120deg, var(--a), var(--b));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    header span { font-size: 12px; color: var(--t2); }
+
+    /* ── Decks ───────────────────────────────────────────────────── */
+    .decks {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding: 10px;
+      flex-shrink: 0;
+    }
+    .deck {
+      background: var(--card);
+      border-radius: var(--r);
+      border: 1.5px solid var(--border);
+      padding: 14px;
+      transition: box-shadow 0.3s, border-color 0.2s;
+    }
+    .deck.deck-a { border-color: rgba(67,97,238,0.25); }
+    .deck.deck-b { border-color: rgba(233,30,140,0.25); }
+    .deck.drag-over { border-color: var(--accent) !important; background: rgba(124,108,255,0.08); }
+    .deck.playing.deck-a { box-shadow: 0 0 28px var(--a-glow); }
+    .deck.playing.deck-b { box-shadow: 0 0 28px var(--b-glow); }
+
+    .deck-label { font-size: 10px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 8px; }
+    .deck-a .deck-label { color: var(--a); }
+    .deck-b .deck-label { color: var(--b); }
+
+    .deck-drop-hint { font-size: 11px; color: var(--t2); border: 1.5px dashed rgba(255,255,255,0.12); border-radius: var(--r-sm); padding: 6px 10px; text-align: center; margin-bottom: 8px; }
+
+    .deck-title { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 10px; min-height: 20px; }
+    .deck-title.empty { color: var(--t2); font-weight: 400; }
+
+    .viz { display: flex; align-items: flex-end; height: 22px; gap: 2px; margin-bottom: 10px; overflow: hidden; }
+    .viz-bar { flex: 1; background: rgba(255,255,255,0.08); border-radius: 1px; height: 3px; transition: height 0.1s ease; }
+    .deck-a.playing .viz-bar { background: rgba(67,97,238,0.7); }
+    .deck-b.playing .viz-bar { background: rgba(233,30,140,0.7); }
+
+    .prog-bar { height: 20px; background: rgba(255,255,255,0.08); background-clip: content-box; padding: 7px 0; box-sizing: border-box; border-radius: 3px; cursor: pointer; margin-bottom: 4px; }
+    .prog-fill { height: 100%; border-radius: 3px; width: 0%; transition: width 0.15s linear; }
+    .deck-a .prog-fill { background: linear-gradient(90deg, var(--a), #7b93f7); }
+    .deck-b .prog-fill { background: linear-gradient(90deg, var(--b), #f472b6); }
+
+    .time { display: flex; justify-content: space-between; font-size: 11px; color: var(--t2); font-variant-numeric: tabular-nums; margin-bottom: 10px; }
+
+    .controls { display: flex; align-items: center; justify-content: center; gap: 10px; }
+    .btn { background: rgba(255,255,255,0.07); border: none; border-radius: 50%; color: var(--t1); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 15px; transition: background 0.15s, transform 0.1s; touch-action: manipulation; }
+    .btn:active { transform: scale(0.92); background: rgba(255,255,255,0.15); }
+    .btn-sm { width: 36px; height: 36px; }
+    .btn-play { width: 50px; height: 50px; font-size: 20px; }
+    .deck-a .btn-play { background: var(--a); }
+    .deck-b .btn-play { background: var(--b); }
+    .deck-a .btn-play:active { background: #3251d0; }
+    .deck-b .btn-play:active { background: #c01577; }
+
+    /* ── Library ─────────────────────────────────────────────────── */
+    .library { flex: 1; display: flex; flex-direction: column; padding: 0 10px 10px; min-height: 0; overflow: hidden; }
+
+    .lib-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-shrink: 0; }
+    .lib-title { font-size: 11px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: var(--t2); flex: 1; }
+    .lib-count { font-size: 12px; color: var(--t2); background: rgba(255,255,255,0.06); padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
+
+    .add-btn {
+      background: var(--accent);
+      color: white; border: none; border-radius: 20px; padding: 7px 14px;
+      font-size: 13px; font-weight: 700; cursor: pointer; touch-action: manipulation; transition: opacity 0.15s; white-space: nowrap;
+    }
+    .add-btn:active { opacity: 0.8; }
+    .folder-btn-top {
+      background: rgba(255,255,255,0.08);
+      color: var(--t1); border: none; border-radius: 20px; padding: 7px 14px;
+      font-size: 13px; font-weight: 600; cursor: pointer; touch-action: manipulation; transition: background 0.15s; white-space: nowrap;
+    }
+    .folder-btn-top:active { background: rgba(255,255,255,0.15); }
+
+    #file-input { display: none; }
+
+    .search { width: 100%; background: var(--card); border: 1px solid var(--border); border-radius: var(--r-sm); color: var(--t1); font-size: 14px; padding: 9px 14px; margin-bottom: 8px; outline: none; flex-shrink: 0; -webkit-appearance: none; }
+    .search::placeholder { color: var(--t2); }
+    .search:focus { border-color: rgba(124,108,255,0.5); }
+
+    .song-list { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; border-radius: var(--r-sm); }
+    .song-list::-webkit-scrollbar { width: 3px; }
+    .song-list::-webkit-scrollbar-track { background: transparent; }
+    .song-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
+
+    /* ── Folder header ───────────────────────────────────────────── */
+    .folder-row {
+      display: flex;
+      align-items: center;
+      padding: 8px 10px;
+      border-radius: var(--r-sm);
+      gap: 8px;
+      background: rgba(255,255,255,0.04);
+      margin-bottom: 2px;
+      cursor: pointer;
+    }
+    .folder-row.drag-over { background: rgba(124,108,255,0.12); border: 1.5px dashed var(--accent); }
+    .folder-toggle { font-size: 10px; color: var(--t2); flex-shrink: 0; width: 12px; }
+    .folder-icon { font-size: 16px; flex-shrink: 0; }
+    .folder-name-label { flex: 1; font-size: 14px; font-weight: 600; }
+    .folder-num { font-size: 11px; color: var(--t2); background: rgba(255,255,255,0.06); padding: 1px 7px; border-radius: 10px; flex-shrink: 0; }
+    .folder-acts { display: flex; gap: 4px; flex-shrink: 0; }
+    .folder-act-btn { background: none; border: none; color: var(--t2); font-size: 14px; padding: 3px 5px; border-radius: 5px; cursor: pointer; touch-action: manipulation; }
+    .folder-act-btn:active { background: rgba(255,255,255,0.1); }
+
+    .folder-sep { font-size: 10px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; color: var(--t2); padding: 10px 10px 5px; }
+
+    /* ── Song item ───────────────────────────────────────────────── */
+    .song-item { display: flex; align-items: center; padding: 9px 10px; border-radius: var(--r-sm); gap: 8px; transition: background 0.15s; touch-action: pan-y; }
+    .song-item:hover { background: var(--card-hi); }
+    .song-item.dragging { opacity: 0.3; }
+    .song-item.in-folder { padding-left: 26px; }
+    .song-item.played .song-name { color: var(--t2); }
+
+    .song-handle { color: var(--t2); font-size: 14px; padding: 2px 3px; cursor: grab; flex-shrink: 0; touch-action: none; letter-spacing: -1px; opacity: 0.5; }
+    .song-handle:active { cursor: grabbing; opacity: 1; }
+    .song-icon { font-size: 17px; flex-shrink: 0; }
+    .song-name { flex: 1; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .song-dur { font-size: 12px; color: var(--t2); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+    .song-folder-tag { font-size: 10px; color: var(--t2); background: rgba(255,255,255,0.06); padding: 2px 7px; border-radius: 4px; flex-shrink: 0; white-space: nowrap; max-width: 90px; overflow: hidden; text-overflow: ellipsis; }
+
+    .played-mark { font-size: 11px; font-weight: 700; color: #4ade80; background: rgba(74,222,128,0.12); border-radius: 4px; padding: 2px 5px; flex-shrink: 0; display: none; }
+    .song-item.played .played-mark { display: block; }
+
+    .song-btns { display: flex; gap: 3px; flex-shrink: 0; }
+    .song-btn { background: rgba(255,255,255,0.06); border: none; border-radius: 5px; color: var(--t2); font-size: 11px; font-weight: 700; padding: 4px 7px; cursor: pointer; touch-action: manipulation; transition: background 0.15s, color 0.15s; }
+    .song-btn:active { background: rgba(255,255,255,0.15); }
+    .song-btn.btn-a:hover, .song-btn.btn-a.active { background: var(--a); color: white; box-shadow: 0 0 8px var(--a-glow); }
+    .song-btn.btn-b:hover, .song-btn.btn-b.active { background: var(--b); color: white; box-shadow: 0 0 8px var(--b-glow); }
+    .song-btn.btn-del:hover { background: rgba(239,68,68,0.3); color: #fca5a5; }
+    .song-btn.btn-folder { font-size: 13px; }
+    .song-btn:disabled { opacity: 0.25; cursor: not-allowed; pointer-events: none; }
+
+    /* ── Folder picker popup ─────────────────────────────────────── */
+    .fp-popup {
+      position: fixed;
+      background: var(--card-hi);
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      box-shadow: 0 8px 28px rgba(0,0,0,0.5);
+      z-index: 9997;
+      min-width: 170px;
+      overflow: hidden;
+      display: none;
+    }
+    .fp-item { padding: 11px 14px; font-size: 13px; cursor: pointer; transition: background 0.12s; border-bottom: 1px solid var(--border); }
+    .fp-item:last-child { border-bottom: none; }
+    .fp-item:active { background: var(--card); }
+    .fp-item.current { color: var(--accent); font-weight: 600; }
+    .fp-new { color: var(--accent); font-weight: 600; }
+
+    /* ── Drag ghost / reorder placeholder ────────────────────────── */
+    .drag-ghost { position: fixed; background: var(--card); border: 1.5px solid var(--accent); border-radius: var(--r-sm); padding: 8px 14px; font-size: 13px; pointer-events: none; z-index: 9999; box-shadow: 0 8px 28px rgba(0,0,0,0.5); white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+    .reorder-ph { border: 1.5px dashed var(--accent); border-radius: var(--r-sm); background: rgba(124,108,255,0.08); pointer-events: none; }
+
+    /* ── Empty / toast ───────────────────────────────────────────── */
+    .empty-lib { text-align: center; padding: 30px 20px; color: var(--t2); }
+    .empty-lib-icon { font-size: 36px; margin-bottom: 10px; }
+    .empty-lib p { font-size: 13px; line-height: 1.7; }
+
+    .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(70px); background: var(--card-hi); color: var(--t1); padding: 10px 20px; border-radius: 22px; font-size: 13px; font-weight: 500; box-shadow: 0 4px 24px rgba(0,0,0,0.4); border: 1px solid var(--border); transition: transform 0.28s cubic-bezier(.34,1.4,.64,1); z-index: 9998; pointer-events: none; }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Music Player</h1>
+  <span>Sleep nummers naar een deck</span>
+</header>
+
+<div class="decks">
+  <div class="deck deck-a" id="deck-a" data-deck="a">
+    <div class="deck-label">Deck A</div>
+    <div class="deck-drop-hint" id="hint-a">Sleep een nummer hierheen</div>
+    <div class="deck-title empty" id="title-a">Geen nummer</div>
+    <div class="viz" id="viz-a"></div>
+    <div class="prog-bar" id="prog-a" data-deck="a"><div class="prog-fill" id="fill-a"></div></div>
+    <div class="time"><span id="cur-a">0:00</span><span id="tot-a">0:00</span></div>
+    <div class="controls">
+      <button class="btn btn-sm" onclick="deckStop('a')">⏹</button>
+      <button class="btn btn-play" id="playbtn-a" onclick="deckToggle('a')">▶</button>
+      <button class="btn btn-sm" onclick="deckEject('a')">⏏</button>
+    </div>
+  </div>
+  <div class="deck deck-b" id="deck-b" data-deck="b">
+    <div class="deck-label">Deck B</div>
+    <div class="deck-drop-hint" id="hint-b">Sleep een nummer hierheen</div>
+    <div class="deck-title empty" id="title-b">Geen nummer</div>
+    <div class="viz" id="viz-b"></div>
+    <div class="prog-bar" id="prog-b" data-deck="b"><div class="prog-fill" id="fill-b"></div></div>
+    <div class="time"><span id="cur-b">0:00</span><span id="tot-b">0:00</span></div>
+    <div class="controls">
+      <button class="btn btn-sm" onclick="deckStop('b')">⏹</button>
+      <button class="btn btn-play" id="playbtn-b" onclick="deckToggle('b')">▶</button>
+      <button class="btn btn-sm" onclick="deckEject('b')">⏏</button>
+    </div>
+  </div>
+</div>
+
+<div class="library">
+  <div class="lib-header">
+    <span class="lib-title">Bibliotheek</span>
+    <span class="lib-count" id="lib-count">0 nummers</span>
+    <button class="folder-btn-top" onclick="newFolder()">+ Map</button>
+    <button class="add-btn" onclick="document.getElementById('file-input').click()">+ Nummers</button>
+    <input type="file" id="file-input" accept="audio/*,video/mp4,.mp3,.mp4,.wav,.m4a,.aac,.ogg,.flac,.aiff" multiple>
+  </div>
+  <input class="search" type="text" placeholder="Zoeken..." id="search" oninput="renderAll()">
+  <div class="song-list" id="song-list">
+    <div class="empty-lib" id="empty-msg">
+      <div class="empty-lib-icon">🎵</div>
+      <p>Geen nummers geladen.<br>Druk op <strong>+ Nummers</strong> om bestanden toe te voegen.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Folder picker popup -->
+<div class="fp-popup" id="fp-popup"></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Service worker ─────────────────────────────────────────────────────────────
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js')
+    .then(() => navigator.serviceWorker.ready)
+    .then(() => toast('✅ App klaar voor offline gebruik'))
+    .catch(() => {});
+}
+
+// ── IndexedDB (audio bestanden bewaren) ────────────────────────────────────────
+
+const DB = (() => {
+  const ready = new Promise((res, rej) => {
+    const r = indexedDB.open('musicplayer', 1);
+    r.onupgradeneeded = e => e.target.result.createObjectStore('songs', { keyPath: 'id' });
+    r.onsuccess = e => res(e.target.result);
+    r.onerror   = () => rej(r.error);
+  });
+  const tx = (mode, fn) => ready.then(db => new Promise((res, rej) => {
+    const t = db.transaction('songs', mode);
+    t.oncomplete = () => res();
+    t.onerror    = () => rej(t.error);
+    fn(t.objectStore('songs'), res, rej);
+  }));
+  return {
+    save:   (id, blob)  => tx('readwrite', s => s.put({ id, blob })),
+    remove: id          => tx('readwrite', s => s.delete(id)),
+    all:    ()          => ready.then(db => new Promise((res, rej) => {
+      const r = db.transaction('songs','readonly').objectStore('songs').getAll();
+      r.onsuccess = () => res(r.result);
+      r.onerror   = () => rej(r.error);
+    })),
+  };
+})();
+
+// ── Metadata opslaan/laden (localStorage) ──────────────────────────────────────
+
+function saveMeta() {
+  try {
+    localStorage.setItem('mp-meta', JSON.stringify({
+      uid, fuid,
+      songs:   library.map(s => ({ id: s.id, name: s.name, size: s.size, duration: s.duration, folderId: s.folderId, type: s.type })),
+      folders: folders,
+      played:  [...played],
+    }));
+  } catch(e) {}
+}
+
+async function loadSaved() {
+  try {
+    const raw = localStorage.getItem('mp-meta');
+    if (!raw) return;
+    const meta = JSON.parse(raw);
+    uid  = meta.uid  || 0;
+    fuid = meta.fuid || 0;
+    folders.push(...(meta.folders || []));
+    (meta.played || []).forEach(id => played.add(id));
+    const blobs = new Map((await DB.all()).map(e => [e.id, e.blob]));
+    for (const s of (meta.songs || [])) {
+      const blob = blobs.get(s.id);
+      if (!blob) continue;
+      library.push({ ...s, url: URL.createObjectURL(blob) });
+    }
+    if (library.length) { renderAll(); toast(library.length + ' nummers geladen'); }
+  } catch(e) { console.warn('loadSaved:', e); }
+}
+
+// ── State ──────────────────────────────────────────────────────────────────────
+
+const library = [];   // { id, name, url, duration, size, folderId, type }
+const folders = [];   // { id, name, open }
+const played  = new Set();
+let uid = 0, fuid = 0;
+
+const D = {
+  a: { el: null, audio: new Audio(), song: null, playing: false, vizTimer: null },
+  b: { el: null, audio: new Audio(), song: null, playing: false, vizTimer: null },
+};
+
+// ── Deck init ──────────────────────────────────────────────────────────────────
+
+['a','b'].forEach(id => {
+  D[id].el = document.getElementById('deck-' + id);
+  const audio = D[id].audio;
+
+  audio.addEventListener('timeupdate', () => {
+    if (!audio.duration) return;
+    document.getElementById('fill-' + id).style.width = (audio.currentTime / audio.duration * 100) + '%';
+    document.getElementById('cur-' + id).textContent = fmt(audio.currentTime);
+  });
+  audio.addEventListener('loadedmetadata', () => {
+    document.getElementById('tot-' + id).textContent = fmt(audio.duration);
+  });
+  audio.addEventListener('ended', () => {
+    audio.currentTime = 0;
+    D[id].playing = false;
+    D[id].el.classList.remove('playing');
+    document.getElementById('playbtn-' + id).textContent = '▶';
+    document.getElementById('fill-' + id).style.width = '0%';
+    document.getElementById('cur-' + id).textContent = '0:00';
+    vizStop(id);
+    if (D[id].song) markPlayed(D[id].song.id);
+  });
+
+  const progEl = document.getElementById('prog-' + id);
+
+  const seek = clientX => {
+    if (!D[id].song || !audio.duration) return;
+    const r = progEl.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
+    audio.currentTime = pct * audio.duration;
+  };
+
+  progEl.addEventListener('click', e => seek(e.clientX));
+
+  progEl.addEventListener('touchstart', e => {
+    e.stopPropagation();
+    seek(e.touches[0].clientX);
+  }, { passive: true });
+
+  progEl.addEventListener('touchmove', e => {
+    e.stopPropagation();
+    seek(e.touches[0].clientX);
+  }, { passive: false });
+
+  // Deck drop target (mouse)
+  D[id].el.addEventListener('dragover', e => { e.preventDefault(); D[id].el.classList.add('drag-over'); });
+  D[id].el.addEventListener('dragleave', () => D[id].el.classList.remove('drag-over'));
+  D[id].el.addEventListener('drop', e => {
+    e.preventDefault();
+    D[id].el.classList.remove('drag-over');
+    const song = library.find(s => s.id === parseInt(e.dataTransfer.getData('text/plain')));
+    if (song) deckLoad(id, song);
+  });
+
+  // Viz bars
+  const viz = document.getElementById('viz-' + id);
+  for (let i = 0; i < 22; i++) { const b = document.createElement('div'); b.className = 'viz-bar'; viz.appendChild(b); }
+});
+
+// ── Playback ───────────────────────────────────────────────────────────────────
+
+function deckToggle(id) {
+  const d = D[id];
+  if (!d.song) { toast('Geen nummer in Deck ' + id.toUpperCase()); return; }
+  if (d.playing) {
+    d.audio.pause(); d.playing = false;
+    d.el.classList.remove('playing');
+    document.getElementById('playbtn-' + id).textContent = '▶';
+    vizStop(id);
+  } else {
+    d.audio.play().then(() => {
+      d.playing = true; d.el.classList.add('playing');
+      document.getElementById('playbtn-' + id).textContent = '⏸';
+      vizStart(id);
+    }).catch(() => toast('Afspelen mislukt'));
+  }
+}
+
+function deckStop(id) {
+  const d = D[id];
+  d.audio.pause(); d.audio.currentTime = 0; d.playing = false;
+  d.el.classList.remove('playing');
+  document.getElementById('playbtn-' + id).textContent = '▶';
+  document.getElementById('fill-' + id).style.width = '0%';
+  document.getElementById('cur-' + id).textContent = '0:00';
+  vizStop(id);
+}
+
+function deckEject(id) {
+  deckStop(id); D[id].song = null; D[id].audio.src = '';
+  const t = document.getElementById('title-' + id);
+  t.textContent = 'Geen nummer'; t.classList.add('empty');
+  document.getElementById('hint-' + id).style.display = '';
+  document.getElementById('tot-' + id).textContent = '0:00';
+  renderAll();
+}
+
+function deckLoad(id, song) {
+  if (played.has(song.id)) { toast('Dit nummer is al afgespeeld'); return; }
+  deckStop(id);
+  D[id].song = song; D[id].audio.src = song.url; D[id].audio.load();
+  const t = document.getElementById('title-' + id);
+  t.textContent = song.name; t.classList.remove('empty');
+  document.getElementById('hint-' + id).style.display = 'none';
+  document.getElementById('cur-' + id).textContent = '0:00';
+  toast('Geladen in Deck ' + id.toUpperCase() + ': ' + song.name);
+  renderAll();
+}
+
+// ── Visualizer ─────────────────────────────────────────────────────────────────
+
+function vizStart(id) {
+  vizStop(id);
+  D[id].vizTimer = setInterval(() => {
+    document.querySelectorAll('#viz-' + id + ' .viz-bar').forEach(b => { b.style.height = (Math.random() * 18 + 2) + 'px'; });
+  }, 110);
+}
+function vizStop(id) {
+  clearInterval(D[id].vizTimer); D[id].vizTimer = null;
+  document.querySelectorAll('#viz-' + id + ' .viz-bar').forEach(b => { b.style.height = '3px'; });
+}
+
+// ── Library – files ────────────────────────────────────────────────────────────
+
+document.getElementById('file-input').addEventListener('change', async e => {
+  const files = Array.from(e.target.files);
+  e.target.value = '';
+  let added = 0;
+  for (const f of files) { if (await addFile(f)) added++; }
+  if (added) { renderAll(); saveMeta(); }
+  if (added > 1) toast(added + ' nummers toegevoegd');
+});
+
+async function addFile(file) {
+  const name = file.name.replace(/\.[^.]+$/, '');
+  if (library.some(s => s.name === name && s.size === file.size)) { toast('"' + name + '" staat al in de bibliotheek'); return false; }
+  const url = URL.createObjectURL(file);
+  const duration = await new Promise(res => {
+    const a = new Audio(url);
+    a.addEventListener('loadedmetadata', () => res(a.duration));
+    a.addEventListener('error', () => res(0));
+    setTimeout(() => res(0), 5000);
+  });
+  const song = { id: uid++, name, url, duration, size: file.size, folderId: null, type: file.type || 'audio/mpeg' };
+  library.push(song);
+  try {
+    const buf  = await file.arrayBuffer();
+    const blob = new Blob([buf], { type: song.type });
+    await DB.save(song.id, blob);
+  } catch(e) {
+    console.warn('DB opslaan mislukt:', e);
+    toast('⚠️ Kon "' + name + '" niet opslaan in database');
+  }
+  return true;
+}
+
+function removeSong(id) {
+  const idx = library.findIndex(s => s.id === id);
+  if (idx === -1) return;
+  const song = library[idx];
+  ['a','b'].forEach(d => { if (D[d].song && D[d].song.id === id) deckEject(d); });
+  URL.revokeObjectURL(song.url);
+  library.splice(idx, 1);
+  played.delete(id);
+  DB.remove(id).catch(() => {});
+  renderAll();
+  saveMeta();
+}
+
+function getSong(id) { return library.find(s => s.id === id); }
+
+function markPlayed(id) {
+  played.add(id);
+  renderAll();
+  saveMeta();
+}
+
+// ── Folders ────────────────────────────────────────────────────────────────────
+
+function newFolder() {
+  const name = prompt('Naam voor de nieuwe map:');
+  if (!name || !name.trim()) return;
+  folders.push({ id: fuid++, name: name.trim(), open: true });
+  renderAll(); saveMeta();
+}
+
+function renameFolder(fid) {
+  const f = folders.find(f => f.id === fid);
+  if (!f) return;
+  const name = prompt('Nieuwe naam:', f.name);
+  if (!name || !name.trim()) return;
+  f.name = name.trim();
+  renderAll(); saveMeta();
+}
+
+function deleteFolder(fid) {
+  library.forEach(s => { if (s.folderId === fid) s.folderId = null; });
+  const idx = folders.findIndex(f => f.id === fid);
+  if (idx !== -1) folders.splice(idx, 1);
+  renderAll(); saveMeta();
+}
+
+function toggleFolder(fid) {
+  const f = folders.find(f => f.id === fid);
+  if (f) { f.open = !f.open; renderAll(); saveMeta(); }
+}
+
+function moveSongToFolder(songId, fid) {
+  const song = getSong(songId);
+  if (!song) return;
+  song.folderId = fid;
+  if (fid !== null) { const f = folders.find(f => f.id === fid); if (f) f.open = true; }
+  hideFP();
+  renderAll(); saveMeta();
+}
+
+// ── Folder picker popup ────────────────────────────────────────────────────────
+
+let fpCloser = null;
+
+function showFP(songId, btn) {
+  hideFP();
+  const song = getSong(songId);
+  if (!song) return;
+  const popup = document.getElementById('fp-popup');
+  popup.innerHTML = '';
+
+  const addItem = (label, isCurrent, onClick) => {
+    const el = document.createElement('div');
+    el.className = 'fp-item' + (isCurrent ? ' current' : '');
+    el.textContent = label;
+    el.addEventListener('touchstart', e => { e.stopPropagation(); onClick(); }, { passive: true });
+    el.onclick = onClick;
+    popup.appendChild(el);
+  };
+
+  addItem('📄 Geen map', song.folderId === null, () => moveSongToFolder(songId, null));
+  folders.forEach(f => addItem('📁 ' + f.name, song.folderId === f.id, () => moveSongToFolder(songId, f.id)));
+
+  const newEl = document.createElement('div');
+  newEl.className = 'fp-item fp-new';
+  newEl.textContent = '+ Nieuwe map';
+  newEl.onclick = () => {
+    hideFP();
+    const name = prompt('Naam voor de nieuwe map:');
+    if (!name || !name.trim()) return;
+    const f = { id: fuid++, name: name.trim(), open: true };
+    folders.push(f);
+    moveSongToFolder(songId, f.id);
+  };
+  popup.appendChild(newEl);
+
+  const rect = btn.getBoundingClientRect();
+  popup.style.top  = Math.min(rect.bottom + 6, window.innerHeight - popup.offsetHeight - 10) + 'px';
+  popup.style.left = Math.min(rect.left, window.innerWidth - 180) + 'px';
+  popup.style.display = 'block';
+
+  // Recalculate position after display
+  requestAnimationFrame(() => {
+    popup.style.top = Math.min(rect.bottom + 6, window.innerHeight - popup.offsetHeight - 10) + 'px';
+  });
+
+  setTimeout(() => {
+    fpCloser = () => hideFP();
+    document.addEventListener('touchstart', fpCloser, { once: true, passive: true });
+    document.addEventListener('click', fpCloser, { once: true });
+  }, 150);
+}
+
+function hideFP() {
+  document.getElementById('fp-popup').style.display = 'none';
+  if (fpCloser) { document.removeEventListener('touchstart', fpCloser); document.removeEventListener('click', fpCloser); fpCloser = null; }
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────────
+
+function cleanupDrag() {
+  document.querySelectorAll('.drag-ghost').forEach(g => g.remove());
+  document.querySelectorAll('.song-item.dragging').forEach(el => {
+    el.style.touchAction = ''; el.classList.remove('dragging');
+  });
+  document.querySelectorAll('.deck, .folder-row').forEach(d => d.classList.remove('drag-over'));
+  if (ro.ghost) { ro.ghost.remove(); ro.ghost = null; }
+  if (ro.ph)    { ro.ph.remove();    ro.ph    = null; }
+  if (ro.item)  { ro.item.style.display = ''; ro.item = null; }
+  ro.active = false; ro.song = null;
+}
+
+function renderAll() {
+  cleanupDrag();
+  const list   = document.getElementById('song-list');
+  const q      = (document.getElementById('search').value || '').toLowerCase();
+  list.innerHTML = '';
+
+  // Folders
+  folders.forEach(folder => {
+    const songs = library.filter(s => s.folderId === folder.id && (!q || s.name.toLowerCase().includes(q)));
+    list.appendChild(makeFolderRow(folder, songs.length));
+    if (folder.open) songs.forEach(s => list.appendChild(makeSongEl(s, true)));
+  });
+
+  // Ungrouped
+  const free = library.filter(s => !s.folderId && (!q || s.name.toLowerCase().includes(q)));
+  if (free.length) {
+    if (folders.length) { const sep = document.createElement('div'); sep.className = 'folder-sep'; sep.textContent = 'Zonder map'; list.appendChild(sep); }
+    free.forEach(s => list.appendChild(makeSongEl(s, false)));
+  }
+
+  document.getElementById('empty-msg').style.display = library.length === 0 ? '' : 'none';
+  updateCount();
+}
+
+function makeFolderRow(folder, count) {
+  const el = document.createElement('div');
+  el.className = 'folder-row';
+  el.dataset.fid = folder.id;
+  el.innerHTML =
+    '<span class="folder-toggle">' + (folder.open ? '▼' : '▶') + '</span>' +
+    '<span class="folder-icon">📁</span>' +
+    '<span class="folder-name-label">' + esc(folder.name) + '</span>' +
+    '<span class="folder-num">' + count + '</span>' +
+    '<div class="folder-acts">' +
+      '<button class="folder-act-btn" title="Naam wijzigen">✏️</button>' +
+      '<button class="folder-act-btn" title="Map verwijderen">🗑</button>' +
+    '</div>';
+
+  const [toggleEl, , , , actsEl] = el.children;
+  el.addEventListener('click', e => {
+    if (!e.target.closest('.folder-acts')) toggleFolder(folder.id);
+  });
+  actsEl.children[0].addEventListener('click', e => { e.stopPropagation(); renameFolder(folder.id); });
+  actsEl.children[1].addEventListener('click', e => { e.stopPropagation(); if (confirm('Map "' + folder.name + '" verwijderen? Nummers blijven in de bibliotheek.')) deleteFolder(folder.id); });
+
+  // Drop target for songs
+  el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('drag-over'); });
+  el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
+  el.addEventListener('drop', e => {
+    e.preventDefault(); el.classList.remove('drag-over');
+    const sid = parseInt(e.dataTransfer.getData('text/plain'));
+    if (!isNaN(sid)) moveSongToFolder(sid, folder.id);
+  });
+
+  return el;
+}
+
+function makeSongEl(song, inFolder) {
+  const item = document.createElement('div');
+  item.className = 'song-item' + (inFolder ? ' in-folder' : '') + (played.has(song.id) ? ' played' : '');
+  item.dataset.id = song.id;
+  const isPlayed = played.has(song.id);
+  const folder = song.folderId !== null ? folders.find(f => f.id === song.folderId) : null;
+  const folderTag = folder ? '<span class="song-folder-tag">📁 ' + esc(folder.name) + '</span>' : '';
+  item.innerHTML =
+    '<span class="song-handle">⠿⠿</span>' +
+    '<span class="song-icon">🎵</span>' +
+    '<span class="song-name">' + esc(song.name) + '</span>' +
+    '<span class="played-mark">✓ gespeeld</span>' +
+    folderTag +
+    '<span class="song-dur">' + fmt(song.duration) + '</span>' +
+    '<div class="song-btns">' +
+      '<button class="song-btn btn-folder" title="Naar map">📁</button>' +
+      '<button class="song-btn btn-a' + (D.a.song && D.a.song.id === song.id ? ' active' : '') + '"' + (isPlayed ? ' disabled' : '') + ' title="Laad in Deck A">A</button>' +
+      '<button class="song-btn btn-b' + (D.b.song && D.b.song.id === song.id ? ' active' : '') + '"' + (isPlayed ? ' disabled' : '') + ' title="Laad in Deck B">B</button>' +
+      '<button class="song-btn btn-del" title="Verwijder">✕</button>' +
+    '</div>';
+
+  const btns = item.querySelector('.song-btns');
+  btns.children[0].addEventListener('click', e => { e.stopPropagation(); showFP(song.id, btns.children[0]); });
+  btns.children[1].addEventListener('click', () => deckLoad('a', song));
+  btns.children[2].addEventListener('click', () => deckLoad('b', song));
+  btns.children[3].addEventListener('click', () => { if (confirm('"' + song.name + '" verwijderen?')) removeSong(song.id); });
+
+  // Lange druk → sleep naar deck
+  setupLongDrag(item, song);
+
+  // Handle → herordenen / naar map / naar deck
+  setupReorder(item.querySelector('.song-handle'), item, song);
+
+  return item;
+}
+
+function updateCount() {
+  const n = library.length;
+  document.getElementById('lib-count').textContent = n + ' ' + (n === 1 ? 'nummer' : 'nummers');
+}
+
+// ── Lange druk → sleep naar deck ──────────────────────────────────────────────
+// Passive touchmove + CSS touch-action zodat iOS audio niet geblokkeerd wordt
+
+function setupLongDrag(item, song) {
+  let timer = null, dragging = false, ghost = null, sx = 0, sy = 0;
+
+  item.addEventListener('touchstart', e => {
+    if (e.target.closest('.song-handle, .song-btns')) return;
+    sx = e.touches[0].clientX; sy = e.touches[0].clientY;
+    dragging = false;
+    timer = setTimeout(() => {
+      dragging = true;
+      item.style.touchAction = 'none'; // stopt scroll via CSS, geen preventDefault nodig
+      item.classList.add('dragging');
+      if (navigator.vibrate) navigator.vibrate(25);
+      ghost = document.createElement('div');
+      ghost.className = 'drag-ghost';
+      ghost.textContent = '🎵 ' + song.name;
+      ghost.style.left = (sx - 70) + 'px';
+      ghost.style.top  = (sy - 20) + 'px';
+      document.body.appendChild(ghost);
+    }, 380);
+  }, { passive: true });
+
+  item.addEventListener('touchmove', e => {
+    const t = e.touches[0];
+    if (!dragging) {
+      if (Math.abs(t.clientX - sx) > 8 || Math.abs(t.clientY - sy) > 8) {
+        clearTimeout(timer); timer = null;
+      }
+      return;
+    }
+    if (ghost) { ghost.style.left = (t.clientX - 70) + 'px'; ghost.style.top = (t.clientY - 20) + 'px'; }
+    const under = document.elementFromPoint(t.clientX, t.clientY);
+    const deckEl = under && under.closest('.deck');
+    document.querySelectorAll('.deck').forEach(d => d.classList.remove('drag-over'));
+    if (deckEl) deckEl.classList.add('drag-over');
+  }, { passive: true }); // passive — iOS audio wordt niet geblokkeerd
+
+  const end = e => {
+    clearTimeout(timer); timer = null;
+    item.style.touchAction = '';
+    if (ghost) { ghost.remove(); ghost = null; }
+    item.classList.remove('dragging');
+    document.querySelectorAll('.deck').forEach(d => d.classList.remove('drag-over'));
+    if (dragging && e.changedTouches && e.changedTouches[0]) {
+      const t = e.changedTouches[0];
+      const under = document.elementFromPoint(t.clientX, t.clientY);
+      const deckEl = under && under.closest('.deck');
+      if (deckEl) deckLoad(deckEl.dataset.deck, song);
+    }
+    dragging = false;
+  };
+  item.addEventListener('touchend',    end, { passive: true });
+  item.addEventListener('touchcancel', end, { passive: true });
+}
+
+// ── Touch reorder ──────────────────────────────────────────────────────────────
+
+let ro = { active: false, item: null, song: null, ghost: null, ph: null, startY: 0 };
+
+function setupReorder(handle, item, song) {
+  handle.addEventListener('touchstart', e => {
+    e.stopPropagation();
+    ro.item = item; ro.song = song; ro.active = false; ro.startY = e.touches[0].clientY;
+  }, { passive: true });
+
+  handle.addEventListener('touchmove', e => {
+    const t = e.touches[0];
+    if (!ro.active) {
+      if (Math.abs(t.clientY - ro.startY) < 8) return;
+      ro.active = true;
+      const g = ro.item.cloneNode(true);
+      g.style.cssText = 'position:fixed;left:10px;right:10px;opacity:0.85;z-index:9999;pointer-events:none;background:var(--card-hi);border-radius:var(--r-sm);border:1px solid var(--accent);padding:9px 12px;display:flex;align-items:center;gap:8px;';
+      document.body.appendChild(g); ro.ghost = g;
+      const ph = document.createElement('div');
+      ph.className = 'reorder-ph'; ph.style.height = ro.item.offsetHeight + 'px';
+      ro.item.parentNode.insertBefore(ph, ro.item);
+      ro.item.style.display = 'none'; ro.ph = ph;
+    }
+    e.preventDefault();
+    if (ro.ghost) ro.ghost.style.top = (t.clientY - 22) + 'px';
+
+    const under = document.elementFromPoint(t.clientX, t.clientY);
+    const folderEl = under && under.closest('.folder-row');
+    document.querySelectorAll('.folder-row').forEach(f => f.classList.remove('drag-over'));
+
+    const deckEl = under && under.closest('.deck');
+    document.querySelectorAll('.deck, .folder-row').forEach(d => d.classList.remove('drag-over'));
+
+    if (deckEl) {
+      deckEl.classList.add('drag-over');
+      if (ro.ph) ro.ph.style.display = 'none';
+    } else if (folderEl) {
+      folderEl.classList.add('drag-over');
+      if (ro.ph) ro.ph.style.display = 'none';
+    } else {
+      if (ro.ph) ro.ph.style.display = '';
+      const list = document.getElementById('song-list');
+      const siblings = [...list.querySelectorAll('.song-item')].filter(el => el.style.display !== 'none');
+      let insertBefore = null;
+      for (const el of siblings) {
+        const r = el.getBoundingClientRect();
+        if (t.clientY < r.top + r.height / 2) { insertBefore = el; break; }
+      }
+      insertBefore ? list.insertBefore(ro.ph, insertBefore) : list.appendChild(ro.ph);
+    }
+  }, { passive: false });
+
+  handle.addEventListener('touchend', e => {
+    if (ro.ghost) { ro.ghost.remove(); ro.ghost = null; }
+    document.querySelectorAll('.deck, .folder-row').forEach(d => d.classList.remove('drag-over'));
+    if (!ro.active) { ro.item = null; ro.song = null; ro.active = false; return; }
+
+    const t = e.changedTouches[0];
+    const under = document.elementFromPoint(t.clientX, t.clientY);
+    const deckEl   = under && under.closest('.deck');
+    const folderEl = under && under.closest('.folder-row');
+
+    if (ro.item) ro.item.style.display = '';
+
+    if (deckEl && ro.song) {
+      if (ro.ph) { ro.ph.remove(); ro.ph = null; }
+      deckLoad(deckEl.dataset.deck, ro.song);
+    } else if (folderEl && ro.song) {
+      if (ro.ph) { ro.ph.remove(); ro.ph = null; }
+      moveSongToFolder(ro.song.id, parseInt(folderEl.dataset.fid));
+    } else if (ro.ph) {
+      ro.ph.parentNode.insertBefore(ro.item, ro.ph);
+      ro.ph.remove(); ro.ph = null;
+      const order = [...document.querySelectorAll('.song-item')].map(el => parseInt(el.dataset.id));
+      library.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+    }
+    ro.active = false; ro.item = null; ro.song = null;
+  });
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+function fmt(s) {
+  if (!s || isNaN(s) || !isFinite(s)) return '0:00';
+  return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+}
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+// ── Vangnet: ruim vastgelopen ghost op bij nieuwe aanraking ───────────────────
+document.addEventListener('touchstart', () => {
+  if (document.querySelector('.drag-ghost')) cleanupDrag();
+}, { passive: true });
+
+// ── Opstarten: herstel opgeslagen nummers ──────────────────────────────────────
+loadSaved();
+</script>
+</body>
+</html>
