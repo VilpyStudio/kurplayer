@@ -355,10 +355,11 @@ async function loadSaved() {
     (meta.played || []).forEach(id => played.add(id));
     const dbEntries = await DB.all();
     toast('ℹ️ Stap 3: ' + dbEntries.length + ' bestanden in IndexedDB');
-    const blobs = new Map(dbEntries.map(e => [e.id, e.blob]));
+    const buffers = new Map(dbEntries.map(e => [e.id, e.blob]));
     for (const s of (meta.songs || [])) {
-      const blob = blobs.get(s.id);
-      if (!blob) continue;
+      const buf = buffers.get(s.id);
+      if (!buf) continue;
+      const blob = new Blob([buf], { type: s.type || 'audio/mpeg' });
       library.push({ ...s, url: URL.createObjectURL(blob) });
     }
     if (library.length) {
@@ -531,12 +532,11 @@ async function addFile(file) {
   const song = { id: uid++, name, url, duration, size: file.size, folderId: null, type: file.type || 'audio/mpeg' };
   library.push(song);
   try {
-    const buf  = await file.arrayBuffer();
-    const blob = new Blob([buf], { type: song.type });
-    await DB.save(song.id, blob);
+    const buf = await file.arrayBuffer();
+    await DB.save(song.id, buf);
   } catch(e) {
     console.warn('DB opslaan mislukt:', e);
-    toast('⚠️ Kon "' + name + '" niet opslaan in database');
+    toast('⚠️ Kon "' + name + '" niet opslaan: ' + (e.message || e.name || 'onbekende fout'));
   }
   return true;
 }
