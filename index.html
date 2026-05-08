@@ -219,8 +219,8 @@
     .empty-lib-icon { font-size: 36px; margin-bottom: 10px; }
     .empty-lib p { font-size: 13px; line-height: 1.7; }
 
-    .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(150%); background: var(--card-hi); color: var(--t1); padding: 10px 20px; border-radius: 22px; font-size: 13px; font-weight: 500; box-shadow: 0 4px 24px rgba(0,0,0,0.4); border: 1px solid var(--border); transition: transform 0.28s cubic-bezier(.34,1.4,.64,1); z-index: 9998; pointer-events: none; white-space: nowrap; }
-    .toast.show { transform: translateX(-50%) translateY(0); }
+    .toast { position: fixed; bottom: -100px; left: 50%; transform: translateX(-50%); background: var(--card-hi); color: var(--t1); padding: 10px 20px; border-radius: 22px; font-size: 13px; font-weight: 500; box-shadow: 0 4px 24px rgba(0,0,0,0.4); border: 1px solid var(--border); transition: bottom 0.28s cubic-bezier(.34,1.4,.64,1); z-index: 9998; pointer-events: none; white-space: nowrap; }
+    .toast.show { bottom: 24px; }
   </style>
 </head>
 <body>
