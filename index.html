@@ -326,26 +326,36 @@ const DB = (() => {
 
 function saveMeta() {
   try {
-    localStorage.setItem('mp-meta', JSON.stringify({
+    const data = JSON.stringify({
       uid, fuid,
       songs:   library.map(s => ({ id: s.id, name: s.name, size: s.size, duration: s.duration, folderId: s.folderId, type: s.type })),
       folders: folders,
       played:  [...played],
-    }));
-  } catch(e) {}
+    });
+    localStorage.setItem('mp-meta', data);
+    if (!localStorage.getItem('mp-meta')) throw new Error('teruggelezen waarde is leeg');
+  } catch(e) {
+    toast('⚠️ Opslaan mislukt: ' + e.message);
+  }
 }
 
 async function loadSaved() {
   try {
     const raw = localStorage.getItem('mp-meta');
-    if (!raw) return;
+    if (!raw) {
+      toast('ℹ️ Stap 1: geen localStorage data gevonden');
+      return;
+    }
     const meta = JSON.parse(raw);
+    const expected = (meta.songs || []).length;
+    toast('ℹ️ Stap 2: ' + expected + ' nummers in localStorage, ophalen uit DB...');
     uid  = meta.uid  || 0;
     fuid = meta.fuid || 0;
     folders.push(...(meta.folders || []));
     (meta.played || []).forEach(id => played.add(id));
-    const blobs = new Map((await DB.all()).map(e => [e.id, e.blob]));
-    const expected = (meta.songs || []).length;
+    const dbEntries = await DB.all();
+    toast('ℹ️ Stap 3: ' + dbEntries.length + ' bestanden in IndexedDB');
+    const blobs = new Map(dbEntries.map(e => [e.id, e.blob]));
     for (const s of (meta.songs || [])) {
       const blob = blobs.get(s.id);
       if (!blob) continue;
@@ -353,15 +363,12 @@ async function loadSaved() {
     }
     if (library.length) {
       renderAll();
-      if (library.length < expected) {
-        toast('⚠️ ' + library.length + '/' + expected + ' nummers geladen — hervoeg ontbrekende nummers');
-      } else {
-        toast('✅ ' + library.length + ' nummers geladen');
-      }
+      toast('✅ ' + library.length + '/' + expected + ' nummers hersteld');
+    } else {
+      toast('⚠️ Stap 4: nummers in meta maar niet in DB — audio kwijt');
     }
   } catch(e) {
-    console.warn('loadSaved:', e);
-    toast('⚠️ Kon nummers niet laden: ' + e.message);
+    toast('⚠️ Laad-fout: ' + e.message);
   }
 }
 
